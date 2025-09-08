@@ -239,4 +239,6 @@ Go to Grafana → Dashboards → Import
   "version": 1
 }
 ```
+![Dashboard](image.png)
 - If  want to download metric with CSV style, In the upper right corner of the panel → click the panel title choose Inspect → Data and dowload csv form
+![CSV](image-1.png)
