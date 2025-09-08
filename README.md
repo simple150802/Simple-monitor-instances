@@ -1,4 +1,4 @@
-# System Monitoring with Prometheus, Grafana, and Node Exporter for 1 host
+# System Monitoring with Prometheus, Grafana, and Node Exporter and Ping
 ## Step 1: Install docker 
 ```bash
 sudo apt-get update -y
@@ -58,8 +58,14 @@ services:
     ports:
       - "9100:9100"
     restart: always
+  blackbox_exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox_exporter
+    ports:
+      - "9115:9115"
+    restart: always
 ```
-- Trong cùng thư mục ~/monitoring tạo prometheus.yml
+- Trong cùng thư mục ~/monitoring tạo prometheus.yml 
 ```bash
 global:
   scrape_interval: 15s
@@ -71,8 +77,30 @@ scrape_configs:
 
   - job_name: "node_exporter"
     static_configs:
-      - targets: ["node_exporter:9100"]
+      - targets: ["node_exporter:9100", "160.191.101.131:9100"]
+  - job_name: "ping"
+    metrics_path: /probe
+    params:
+      module: [icmp]   
+    static_configs:
+      - targets:
+          - 160.191.101.131   # VM to monitor ping
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox_exporter:9115
 ```
+- In monitor host (for measuring testbed) install docker like the first step and
+```bash
+docker run -d \
+  --name=node_exporter \
+  --net="host" \
+  prom/node-exporter:latest
+```
+
 ## Step 3: Start Prometheus Container
 ```bash
 docker compose up -d
@@ -107,9 +135,9 @@ Go to Grafana → Dashboards → Import
     ]
   },
   "editable": true,
-  "gnetId": null,
+  "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": null,
+  "id": 1,
   "links": [],
   "panels": [
     {
@@ -119,9 +147,11 @@ Go to Grafana → Dashboards → Import
       },
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "unit": "percent"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
@@ -130,15 +160,26 @@ Go to Grafana → Dashboards → Import
         "y": 0
       },
       "id": 1,
-      "title": "CPU Usage (%)",
-      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "12.1.1",
       "targets": [
         {
-          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
-          "legendFormat": "CPU Usage",
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\", instance=~\"$instance\"}[1m])) * 100)",
+          "legendFormat": "{{instance}} CPU Usage",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "CPU Usage (%)",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -157,15 +198,23 @@ Go to Grafana → Dashboards → Import
         "y": 0
       },
       "id": 2,
-      "title": "Memory Usage (%)",
-      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "pluginVersion": "12.1.1",
       "targets": [
         {
-          "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
-          "legendFormat": "Memory Usage",
+          "expr": "(1 - (node_memory_MemAvailable_bytes{instance=~\"$instance\"} / node_memory_MemTotal_bytes{instance=~\"$instance\"})) * 100",
+          "legendFormat": "{{instance}} Memory Usage",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "Memory Usage (%)",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -184,15 +233,23 @@ Go to Grafana → Dashboards → Import
         "y": 8
       },
       "id": 3,
-      "title": "Disk Usage (%)",
-      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "pluginVersion": "12.1.1",
       "targets": [
         {
-          "expr": "(1 - (node_filesystem_avail_bytes{fstype!=\"tmpfs\",fstype!=\"overlay\"} / node_filesystem_size_bytes{fstype!=\"tmpfs\",fstype!=\"overlay\"})) * 100",
-          "legendFormat": "{{mountpoint}}",
+          "expr": "(1 - (node_filesystem_avail_bytes{fstype!=\"tmpfs\",fstype!=\"overlay\", instance=~\"$instance\"} / node_filesystem_size_bytes{fstype!=\"tmpfs\",fstype!=\"overlay\", instance=~\"$instance\"})) * 100",
+          "legendFormat": "{{instance}} {{mountpoint}}",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "Disk Usage (%)",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -211,23 +268,50 @@ Go to Grafana → Dashboards → Import
         "y": 8
       },
       "id": 4,
-      "title": "Load Average (1m)",
-      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "pluginVersion": "12.1.1",
       "targets": [
         {
-          "expr": "node_load1",
-          "legendFormat": "Load 1m",
+          "expr": "node_load1{instance=~\"$instance\"}",
+          "legendFormat": "{{instance}} Load 1m",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "Load Average (1m)",
+      "type": "timeseries"
     }
   ],
   "refresh": "10s",
-  "schemaVersion": 30,
-  "style": "dark",
-  "tags": ["node_exporter", "system", "vm"],
+  "schemaVersion": 41,
+  "tags": [
+    "node_exporter",
+    "system",
+    "vm"
+  ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "text": "160.191.101.131:9100",
+          "value": "160.191.101.131:9100"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "name": "instance",
+        "query": "label_values(node_cpu_seconds_total, instance)",
+        "refresh": 1,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-15m",
@@ -236,9 +320,233 @@ Go to Grafana → Dashboards → Import
   "timezone": "",
   "title": "VM System Metrics",
   "uid": "vm-system-metrics",
-  "version": 1
+  "version": 3
 }
 ```
-![Dashboard](image.png)
+
+![vm metric](image-2.png)
 - If  want to download metric with CSV style, In the upper right corner of the panel → click the panel title choose Inspect → Data and dowload csv form
-![CSV](image-1.png)
+![CSV metrics](image-3.png)
+- Create new dashboard and import
+```bash
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.4.2",
+      "targets": [
+        {
+          "expr": "probe_success{instance=~\"$instance\"}",
+          "legendFormat": "Success",
+          "refId": "A"
+        }
+      ],
+      "title": "Ping Status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 20,
+        "x": 4,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.4.2",
+      "targets": [
+        {
+          "expr": "probe_icmp_duration_seconds{instance=~\"$instance\", phase=\"rtt\"} * 1000",
+          "legendFormat": "{{instance}} RTT",
+          "refId": "A"
+        }
+      ],
+      "title": "Ping Latency (ms)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["ping", "network", "latency"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "160.191.101.131",
+          "value": "160.191.101.131"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(probe_success, instance)",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Instance",
+        "multi": false,
+        "name": "instance",
+        "options": [],
+        "query": {
+          "query": "label_values(probe_success, instance)",
+          "refId": "Prometheus-instance-Variable-Query"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Ping Latency Dashboard",
+  "uid": "ping-latency",
+  "version": 1,
+  "weekStart": ""
+}
+
+```
+![Success ](image.png)
+![Ping-metric](image-1.png)
