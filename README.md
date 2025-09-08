@@ -1,4 +1,12 @@
 # System Monitoring with Prometheus, Grafana, and Node Exporter and Ping
+- In monitor host (for measuring testbed) install docker like the first step and
+```bash
+docker run -d \
+  --name=node_exporter \
+  --net="host" \
+  prom/node-exporter:latest
+```
+- In node to build monitor to collect metrics
 ## Step 1: Install docker 
 ```bash
 sudo apt-get update -y
@@ -92,13 +100,6 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox_exporter:9115
-```
-- In monitor host (for measuring testbed) install docker like the first step and
-```bash
-docker run -d \
-  --name=node_exporter \
-  --net="host" \
-  prom/node-exporter:latest
 ```
 
 ## Step 3: Start Prometheus Container
