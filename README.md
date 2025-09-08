@@ -1,5 +1,5 @@
 # System Monitoring with Prometheus, Grafana, and Node Exporter and Ping
-- In monitor host (for measuring testbed) install docker like the first step and
+- In monitor host (for measuring testbed) install docker like the  step 1 and: 
 ```bash
 docker run -d \
   --name=node_exporter \
