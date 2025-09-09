@@ -299,8 +299,8 @@ Go to Grafana → Dashboards → Import
     "list": [
       {
         "current": {
-          "text": "160.191.101.131:9100",
-          "value": "160.191.101.131:9100"
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",
