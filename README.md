@@ -510,8 +510,8 @@ Go to Grafana → Dashboards → Import
       {
         "current": {
           "selected": false,
-          "text": "160.191.101.131",
-          "value": "160.191.101.131"
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",
